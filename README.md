@@ -9,6 +9,12 @@ docker build --rm -t gnn_bim .
 docker-compose up
 ```
 
+## Setup Commandas
+
+```
+pip install -r requirements.txt
+```
+
 ## NEO4j Commands
 
 All nodes and relationships.

@@ -1,4 +1,5 @@
 import ifcopenshell
+import ifcopenshell.util.cost
 import ifcopenshell.util.element
 
 from langchain_core.documents import Document
@@ -38,6 +39,31 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
             for item in qsets["BaseQuantities"]:
                 properties[f'BaseQuantities_{item}'] = qsets["BaseQuantities"][item]
 
+        # https://docs.ifcopenshell.org/autoapi/ifcopenshell/util/cost/index.html
+        if ifc_objects[ifc_object.id()]["type"] == 'IfcCostItem':
+
+            total_quantities = ifcopenshell.util.cost.get_total_quantity(ifc_object)
+            if total_quantities is not None:
+                print(ifc_object.id(), ifc_object.Name)
+
+                print('\nquantities')
+                print(total_quantities)
+
+                #print(dir(ifc_object))
+                print('\ncost_values')
+                cost_values = ifcopenshell.util.cost.get_cost_values(ifc_object)
+                for cost_value in cost_values:
+                    print(cost_value)
+                    for attr in cost_value:
+                        print(f'attr {attr}: {cost_value[attr]}')
+                
+                print('\nassignments')
+                cost_assignments = ifcopenshell.util.cost.get_cost_item_assignments(ifc_object)
+                for element_assignment in cost_assignments:
+                    print(element_assignment.id(), element_assignment.Name)
+
+                print('\n\n')
+            
         nodes.append(
                 Node(
                     id=ifc_objects[ifc_object.id()]["id"],
