@@ -1,0 +1,31 @@
+version: '3'
+services:
+  neo4j_service:
+    build: ./neo4j
+    ports:
+      - 7474:7474 # Neo4j Web UI
+      - 7687:7687 # Neo4j API
+    environment:
+      NEO4J_AUTH: "neo4j/password"
+      NEO4J_apoc_export_file_enabled: "true"
+      NEO4J_apoc_import_file_enabled: "true"
+      NEO4J_apoc_import_file_use__neo4j__config: "true"
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - ./data:/data
+  gnnbim_service:
+    image: gnn_bim
+    volumes: 
+      - ./:/home/ubuntu/dev
+      #- /home/fernando/dev:/home/ubuntu/dev
+    tty: true
+    stdin_open: true 
+    network_mode: "host"
+    deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: all # alternatively, use `count: all` for all GPUs
+                capabilities: [gpu]
+              
