@@ -11,6 +11,7 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
     model = ifcopenshell.open(ifc_file_path)
 
     nodes = []
+    relationships = []
     ifc_objects={}
     for ifc_object in model.by_type("IfcObject"):
         if ifc_object.is_a("IfcVirtualElement"):
@@ -28,7 +29,7 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
             "type":ifc_object.is_a()
         }
 
-        properties={
+        ifc_object_properties={
             "type":ifc_objects[ifc_object.id()]["type"],
             "name": ifc_object.Name,
             "BaseQuantities_Height": '',
@@ -37,8 +38,8 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
 
         if qsets.get("BaseQuantities") is not None:
             for item in qsets["BaseQuantities"]:
-                properties[f'BaseQuantities_{item}'] = qsets["BaseQuantities"][item]
-
+                ifc_object_properties[f'BaseQuantities_{item}'] = qsets["BaseQuantities"][item]
+        
         # https://docs.ifcopenshell.org/autoapi/ifcopenshell/util/cost/index.html
         if ifc_objects[ifc_object.id()]["type"] == 'IfcCostItem':
 
@@ -48,31 +49,88 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
 
                 print('\nquantities')
                 print(total_quantities)
+                ifc_object_properties[f'CostItemQuantity'] = total_quantities
 
                 #print(dir(ifc_object))
                 print('\ncost_values')
                 cost_values = ifcopenshell.util.cost.get_cost_values(ifc_object)
                 for cost_value in cost_values:
                     print(cost_value)
-                    for attr in cost_value:
-                        print(f'attr {attr}: {cost_value[attr]}')
-                
+                    #for attr in cost_value:
+                    #    print(f'attr {attr}: {cost_value[attr]}')
+
+                    print(cost_value["id"])
+                    ifc_objects[cost_value["id"]] = {
+                        "id": f'#{str(cost_value["id"])}',
+                        "type": 'IfcCostItemValue'
+                    }
+                    properties={
+                        "type":'IfcCostItemValue',
+                        "label": cost_value["label"],
+                        "name": cost_value["name"],
+                        "category": cost_value["category"],
+                        "value": cost_value["applied_value"]
+                    }
+                    
+                    nodes.append(
+                        Node(
+                            id=ifc_objects[cost_value["id"]]["id"],
+                            type=ifc_objects[cost_value["id"]]["type"],
+                            properties=properties
+                        )
+                    )
+
+                    source_node = Node(
+                        id=ifc_objects[ifc_object.id()]["id"],
+                        type=ifc_objects[ifc_object.id()]["type"],
+                    )
+                    target_node = Node(
+                        id=ifc_objects[cost_value["id"]]["id"],
+                        type=ifc_objects[cost_value["id"]]["type"],
+                    )
+                    relationships.append(
+                        Relationship(
+                            source=source_node,
+                            target=target_node,
+                            type='IfcRelCostItemValue',
+                            properties={},
+                        )
+                    )
                 print('\nassignments')
                 cost_assignments = ifcopenshell.util.cost.get_cost_item_assignments(ifc_object)
                 for element_assignment in cost_assignments:
                     print(element_assignment.id(), element_assignment.Name)
 
+                    source_node = Node(
+                        id = f'#{str(element_assignment.id())}',
+                        type = element_assignment.is_a(),
+                    )
+                    target_node = Node(
+                        id=ifc_objects[ifc_object.id()]["id"],
+                        type=ifc_objects[ifc_object.id()]["type"],
+                    )
+                    
+                    
+                    relationships.append(
+                        Relationship(
+                            source=source_node,
+                            target=target_node,
+                            type='IfcRelCost',
+                            properties={},
+                        )
+                    )
+
+                
                 print('\n\n')
-            
+
         nodes.append(
-                Node(
-                    id=ifc_objects[ifc_object.id()]["id"],
-                    type=ifc_objects[ifc_object.id()]["type"],
-                    properties=properties
-                )
+            Node(
+                id=ifc_objects[ifc_object.id()]["id"],
+                type=ifc_objects[ifc_object.id()]["type"],
+                properties=ifc_object_properties
             )
-        
-    relationships = []
+        )
+
     for ifc_rel in model.by_type("IfcRelationship"):
 
         relating_object = None
