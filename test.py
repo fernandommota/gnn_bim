@@ -16,7 +16,7 @@ def save_graph(graph, entities):
     graph.add_graph_documents(
         entities,
         baseEntityLabel=True,
-        include_source=True
+        include_source=False
     )
 
 graph_ifc_cost = create_or_connecto_to_graph("ifc_cost")

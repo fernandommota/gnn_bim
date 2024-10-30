@@ -32,13 +32,15 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
         ifc_object_properties={
             "type":ifc_objects[ifc_object.id()]["type"],
             "name": ifc_object.Name,
-            "BaseQuantities_Height": '',
-            "BaseQuantities_Length": ''
         }
 
-        if qsets.get("BaseQuantities") is not None:
-            for item in qsets["BaseQuantities"]:
-                ifc_object_properties[f'BaseQuantities_{item}'] = qsets["BaseQuantities"][item]
+        if qsets.get("Qto_CoveringBaseQuantities") is not None:
+            for item in qsets["Qto_CoveringBaseQuantities"]:
+                ifc_object_properties[f'Qto_CoveringBaseQuantities{item}'] = qsets["Qto_CoveringBaseQuantities"][item]
+
+        if qsets.get("Qto_WallBaseQuantities") is not None:
+            for item in qsets["Qto_WallBaseQuantities"]:
+                ifc_object_properties[f'Qto_WallBaseQuantities{item}'] = qsets["Qto_WallBaseQuantities"][item]
         
         # https://docs.ifcopenshell.org/autoapi/ifcopenshell/util/cost/index.html
         if ifc_objects[ifc_object.id()]["type"] == 'IfcCostItem':
@@ -50,16 +52,11 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
                 print('\nquantities')
                 print(total_quantities)
                 ifc_object_properties[f'CostItemQuantity'] = total_quantities
-
-                #print(dir(ifc_object))
-                print('\ncost_values')
+                ifc_object_properties[f'CostItemTotal'] = 0
+                
                 cost_values = ifcopenshell.util.cost.get_cost_values(ifc_object)
                 for cost_value in cost_values:
-                    print(cost_value)
-                    #for attr in cost_value:
-                    #    print(f'attr {attr}: {cost_value[attr]}')
-
-                    print(cost_value["id"])
+                    print('cost_value', cost_value)
                     ifc_objects[cost_value["id"]] = {
                         "id": f'#{str(cost_value["id"])}',
                         "type": 'IfcCostItemValue'
@@ -96,10 +93,31 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
                             properties={},
                         )
                     )
+
                 print('\nassignments')
                 cost_assignments = ifcopenshell.util.cost.get_cost_item_assignments(ifc_object)
                 for element_assignment in cost_assignments:
-                    print(element_assignment.id(), element_assignment.Name)
+                    print(element_assignment.id(), element_assignment.Name, element_assignment.is_a())
+
+                    psets = ifcopenshell.util.element.get_psets(element_assignment, psets_only=True)
+                    qsets = ifcopenshell.util.element.get_psets(element_assignment, qtos_only=True)
+                    
+                    print('\nassignments psets',psets)
+                    print('\nassignments psets',qsets)
+
+                    relationship_properties = {
+                        "CostItemTotal": 0
+                    }
+                    for cost_value in cost_values:
+                        if element_assignment.is_a() == "IfcCovering":
+                            total = qsets["Qto_CoveringBaseQuantities"]["GrossArea"] * cost_value["applied_value"]
+                            relationship_properties["CostItemTotal"] += total
+                        elif element_assignment.is_a() == "IfcWall":
+                            total = qsets["Qto_WallBaseQuantities"]["NetSideArea"] * cost_value["applied_value"]
+                            relationship_properties["CostItemTotal"] += total
+                        elif element_assignment.is_a() == "IfcDoor":
+                            total = 1 * cost_value["applied_value"]
+                            relationship_properties["CostItemTotal"] += total
 
                     source_node = Node(
                         id = f'#{str(element_assignment.id())}',
@@ -110,13 +128,14 @@ def convert_ifc_to_graph_document(ifc_file_path) -> List[GraphDocument]:
                         type=ifc_objects[ifc_object.id()]["type"],
                     )
                     
-                    
+                    print('\relationship_properties',relationship_properties)
+                    ifc_object_properties['CostItemTotal'] += relationship_properties["CostItemTotal"]
                     relationships.append(
                         Relationship(
                             source=source_node,
                             target=target_node,
                             type='IfcRelCost',
-                            properties={},
+                            properties=relationship_properties,
                         )
                     )
 
