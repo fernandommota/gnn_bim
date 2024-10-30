@@ -21,6 +21,6 @@ def save_graph(graph, entities):
 
 graph_ifc_cost = create_or_connecto_to_graph("ifc_cost")
 
-entities = convert_ifc_to_graph_document('input/ifc_cost/ifc_cost_sample.ifc')
+entities = convert_ifc_to_graph_document('input/ifc_cost/ifc_cost_sample_clean.ifc')
 
 save_graph(graph_ifc_cost, entities)
