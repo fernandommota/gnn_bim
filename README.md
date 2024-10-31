@@ -11,7 +11,11 @@ docker-compose up
 
 ## Setup Commandas
 
+Create a virtual environment using the util class python_path.py.
+Example: /opt/conda/bin/python
+
 ```
+pip install ifcopenshell
 pip install -r requirements.txt
 ```
 
