@@ -21,11 +21,11 @@ services:
     tty: true
     stdin_open: true 
     network_mode: "host"
-    deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: all # alternatively, use `count: all` for all GPUs
-                capabilities: [gpu]
-              
+    #deploy:
+    #    resources:
+    #      reservations:
+    #        devices:
+    #          - driver: nvidia
+    #            count: all # alternatively, use `count: all` for all GPUs
+    #            capabilities: [gpu]
+           

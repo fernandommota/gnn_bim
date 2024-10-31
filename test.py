@@ -11,6 +11,8 @@ from langchain_community.graphs import Neo4jGraph
 
 from ifc_to_graph import convert_ifc_to_graph_document
 
+from graph_to_ifc import write_graph_as_ifc
+
 
 def create_or_connecto_to_graph(database):
 
@@ -57,6 +59,14 @@ def save_graph(graph, entities):
 
     return graph
 
+def convert_string_to_dictionary(result):
+    response_dict = []
+    for item in result:
+        if item is not None:
+            response_dict.append(json.loads(item))
+
+    return response_dict
+
 def graph_retriever(graph, entities):
 
     """
@@ -74,7 +84,7 @@ def graph_retriever(graph, entities):
                 CALL {
                 WITH node
                 MATCH (node)<-[r:IFC]-(neighbor)
-                RETURN '{"id":"'+node.id + '", "type":"' + node.type + '", "properties": { "Qto_WallBaseQuantitiesGrossSideArea":"' + node.Qto_WallBaseQuantitiesGrossSideArea + '"}}' AS output
+                RETURN '{"id":"'+node.id + '", "type":"' + node.type + '", "attributes": { "Qto_WallBaseQuantitiesGrossSideArea":"' + node.Qto_WallBaseQuantitiesGrossSideArea + '"}}' AS output
                 }
                 RETURN output LIMIT 50
                 """,
@@ -83,6 +93,7 @@ def graph_retriever(graph, entities):
             #[print(el['output']) for el in response]
             temp = [el['output'] for el in response]
             result = list(dict.fromkeys(temp))
+            response_dict = {}
         elif entity_type == "IfcCovering":
             response = graph.query(
                 """CALL db.index.fulltext.queryNodes('fulltext_entity', $query, {limit:200})
@@ -90,7 +101,7 @@ def graph_retriever(graph, entities):
                 CALL {
                 WITH node
                 MATCH (node)<-[r:IFC]-(neighbor)
-                RETURN '{"id":"'+node.id + '", "type":"' + node.type + '", "properties": { "Qto_CoveringBaseQuantitiesGrossArea":"' + node.Qto_CoveringBaseQuantitiesGrossArea + '"}}' AS output
+                RETURN '{"id":"'+node.id + '", "type":"' + node.type + '", "attributes": { "Qto_CoveringBaseQuantitiesGrossArea":"' + node.Qto_CoveringBaseQuantitiesGrossArea + '"}}' AS output
                 }
                 RETURN output LIMIT 50
                 """,
@@ -99,6 +110,7 @@ def graph_retriever(graph, entities):
             #[print(el['output']) for el in response]
             temp = [el['output'] for el in response]
             result = list(dict.fromkeys(temp))
+            response_dict = {}
         elif entity_type == "IfcDoor":
             response = graph.query(
                 """CALL db.index.fulltext.queryNodes('fulltext_entity', $query, {limit:200})
@@ -115,14 +127,54 @@ def graph_retriever(graph, entities):
             #[print(el['output']) for el in response]
             temp = [el['output'] for el in response]
             result = list(dict.fromkeys(temp))
+            response_dict = {}
         elif entity_type == "IfcCostItem":
+            response = graph.query(
+                """CALL db.index.fulltext.queryNodes('fulltext_entity', $query, {limit:200})
+                YIELD node,score
+                CALL {
+                WITH node 
+                MATCH (n:IfcCostItem)
+                RETURN '{"id":"'+node.id + '", "type":"' + node.type + '", "attributes":{ "Name":"' + node.name + '"}}' AS output
+                }
+                RETURN output LIMIT 2000
+                """,
+                {"query": entity["type"]},
+            )
+            temp = [el['output'] for el in response]
+            result = list(dict.fromkeys(temp))
+
+            response_dict = convert_string_to_dictionary(result)
+
             response = graph.query(
                 """CALL db.index.fulltext.queryNodes('fulltext_entity', $query, {limit:200})
                 YIELD node,score
                 CALL {
                 WITH node
                 MATCH (node)<-[r:IFCRELCOST]-(neighbor)
-                RETURN '{"id":"'+node.id + '", "type":"' + node.type + '"}' AS output
+                RETURN '{"id":"'+node.id + '", "assignment":{ "id":"' + neighbor.id + '", "type":"' + neighbor.type + '"}}' AS output
+                }
+                RETURN output LIMIT 2000
+                """,
+                {"query": entity["type"]},
+            )
+            assignments = convert_string_to_dictionary([el['output'] for el in response])
+
+            for item in response_dict:
+                id = item["id"]
+                item["assignments"] = []
+                for assignment in assignments:
+                    if assignment["id"] == id:
+                        item["assignments"].append(assignment["assignment"]) 
+
+        elif entity_type == "IfcCostItemValue":
+            response = graph.query(
+                """CALL db.index.fulltext.queryNodes('fulltext_entity', $query, {limit:200})
+                YIELD node,score
+                CALL {
+                WITH node
+                MATCH (node)<-[r:IFCRELCOSTITEMVALUE]-(neighbor)
+                RETURN '{"id":"'+node.id + '", "type":"' + node.type + '", "attributes":{ "Name":"' + node.name + '","AppliedValue":"' + node.value + '"},"relationship": {"type": "' + type(r) +'", "id": "' + neighbor.id + '"}}' AS output
                 }
                 RETURN output LIMIT 2000
                 """,
@@ -130,13 +182,10 @@ def graph_retriever(graph, entities):
             )
             result = [el['output'] for el in response]
 
-        response_dict = []
-        for item in result:
-            if item is not None:
-                response_dict.append(json.loads(item))
+            response_dict = convert_string_to_dictionary(result)
 
         results.append({
-            "entity_name": entity_type,
+            "type": entity_type,
             "response": response_dict
         })
 
@@ -153,10 +202,11 @@ entities = [
     {"type":"IfcWall"},
     {"type":"IfcCovering"},
     {"type":"IfcDoor"},
-    {"type":"IfcCostItem"}
+    {"type":"IfcCostItem"},
+    {"type":"IfcCostItemValue"},
 ]
 results = graph_retriever(graph, entities)
 
-for result in results:
-    print('result len', len(result["response"]))
-    print('result', result)
+ifc_source_file_path = "input/ifc_cost/ifc_cost_sample_clean.ifc"
+ifc_target_file_path = "output/ifc_cost/ifc_cost_sample_custom.ifc"
+write_graph_as_ifc(results, ifc_source_file_path, ifc_target_file_path)
