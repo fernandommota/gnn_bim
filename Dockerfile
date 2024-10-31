@@ -4,5 +4,10 @@ RUN apt-get update && \
 RUN useradd -rm -d /home/ubuntu -s /bin/bash -g root -G sudo -u 1010 ubuntu
 RUN apt-get -y install curl
 RUN apt-get -y install telnet
+
 USER ubuntu
 WORKDIR /home/ubuntu
+
+RUN apt-get -y install gcc
+RUN pip install ifcopenshell
+RUN pip install -r /home/ubuntu/dev/requirements.txt
